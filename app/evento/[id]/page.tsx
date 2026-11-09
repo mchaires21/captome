@@ -100,7 +100,7 @@ export default function EventoDetalle() {
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       }
-    } catch (err) {
+    } catch {
       alert('Ocurrió un error al conectar con la pasarela de pagos.');
     } finally {
       setProcesandoPago(false);
@@ -170,7 +170,7 @@ export default function EventoDetalle() {
         ) : fotosFiltradas.length === 0 ? (
           <div className="py-20 text-center text-neutral-500 bg-neutral-950 border border-neutral-800 rounded-2xl">
             {busquedaDorsal ? (
-              <p className="text-base">No se encontraron fotos con el dorsal <span className="text-white font-bold">"{busquedaDorsal}"</span>.</p>
+              <p className="text-base">No se encontraron fotos con el dorsal <span className="text-white font-bold">&quot;{busquedaDorsal}&quot;</span>.</p>
             ) : (
               <p className="text-base">Aún no hay fotos registradas para este evento.</p>
             )}
@@ -211,86 +211,4 @@ export default function EventoDetalle() {
                   </div>
 
                   <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900 z-10">
-                    <span className="text-xs text-neutral-400 truncate">
-                      {foto.fotografo ? `Por ${foto.fotografo}` : 'Foto Oficial'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFotoSeleccionada(foto);
-                      }}
-                      className="bg-white text-black hover:bg-neutral-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Comprar
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* Modal de Detalle y Pago */}
-      {fotoSeleccionada && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-2xl w-full overflow-hidden flex flex-col md:flex-row">
-            <div className="md:w-1/2 aspect-[4/3] bg-black relative flex items-center justify-center overflow-hidden">
-              <img
-                src={fotoSeleccionada.url}
-                alt="Vista previa"
-                className="w-full h-full object-cover"
-              />
-              {/* Marca de agua en el modal */}
-              <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
-                <div className="rotate-[-25deg] text-white/35 text-xl font-black tracking-widest uppercase select-none border-2 border-white/25 px-4 py-1.5 rounded-lg">
-                  CAPTOME • MUESTRA
-                </div>
-              </div>
-            </div>
-            <div className="p-6 md:w-1/2 flex flex-col justify-between">
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Fotografía HD</span>
-                  <button
-                    type="button"
-                    onClick={() => setFotoSeleccionada(null)}
-                    className="text-neutral-400 hover:text-white font-bold text-base p-1"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <h3 className="text-xl font-bold mb-2">Comprar Foto Digital</h3>
-                <p className="text-xs text-neutral-400 mb-4">
-                  Incluye descarga instantánea en alta resolución sin marca de agua y licencia de uso personal.
-                </p>
-                <div className="text-2xl font-black text-green-400 mb-6">
-                  ${fotoSeleccionada.precio || 150} MXN
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => iniciarPago(fotoSeleccionada)}
-                  disabled={procesandoPago}
-                  className="w-full bg-white text-black font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer text-sm"
-                >
-                  {procesandoPago ? 'Procesando...' : 'Pagar con Tarjeta / Mercado Pago'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFotoSeleccionada(null)}
-                  className="w-full block text-center bg-neutral-800 text-neutral-300 font-semibold py-2.5 px-4 rounded-xl hover:bg-neutral-700 text-xs transition-colors cursor-pointer"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                    <span className="text-xs text-neutral-400 truncate"></span>
