@@ -1,104 +1,113 @@
-import { supabase } from '@/lib/supabase';
-import QRCodeModal from '@/components/QRCodeModal';
-import { Camera, Phone, Share2 } from 'lucide-react';
-import { notFound } from 'next/navigation';
+import { Search, ChevronDown, ShoppingBag } from "lucide-react";
+import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 
-export const dynamic = 'force-dynamic';
+// Desactiva la caché de Next.js para actualizar los datos al instante
+export const dynamic = "force-dynamic";
 
-interface Props {
-  params: Promise<{ username: string }>;
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-export default async function UserProfile({ params }: Props) {
-  const { username } = await params;
-
-  // 1. Obtener perfil de la base de datos
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('username', username)
-    .single();
-
-  if (!profile) {
-    notFound();
-  }
-
-  // 2. Obtener enlaces del usuario
-  const { data: links } = await supabase
-    .from('links')
-    .select('*')
-    .eq('user_id', profile.id)
-    .eq('is_active', true)
-    .order('position', { ascending: true });
+export default async function ExplorarEventos() {
+  const { data: eventos } = await supabase.from("eventos").select("*");
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-white flex flex-col items-center px-4 py-12">
-      <div className="w-full max-w-md flex flex-col items-center text-center">
-        {/* Avatar */}
-        <div className="w-28 h-28 rounded-full bg-neutral-800 border-2 border-amber-500 overflow-hidden flex items-center justify-center mb-4 shadow-lg shadow-amber-500/10">
-          {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
-          ) : (
-            <Camera className="w-12 h-12 text-amber-500" />
-          )}
+    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans">
+      {/* BARRA DE NAVEGACIÓN */}
+      <header className="flex items-center justify-between px-8 py-4 border-b border-[#222] bg-[#0a0a0a]">
+        <div className="text-xl font-extrabold tracking-tight text-white">captome</div>
+        <nav className="hidden md:flex gap-8 text-sm font-medium text-gray-400">
+          <a href="#" className="text-white">Explorar</a>
+          <a href="#" className="hover:text-white transition-colors">Precios</a>
+        </nav>
+        <div className="flex items-center gap-5">
+          <button className="text-gray-400 hover:text-white transition-colors">
+            <ShoppingBag size={20} />
+          </button>
+          <button className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Entrar</button>
+          <button className="bg-white text-black px-5 py-2 rounded-full text-sm font-bold hover:bg-gray-200 transition-colors">
+            + Crear cuenta
+          </button>
+        </div>
+      </header>
+
+      {/* CONTENIDO PRINCIPAL */}
+      <main className="max-w-7xl mx-auto px-8 py-12">
+        {/* ENCABEZADO */}
+        <div className="mb-10">
+          <p className="text-gray-400 text-xs font-bold tracking-widest uppercase mb-3">Catálogo</p>
+          <h1 className="text-5xl font-bold mb-4 tracking-tight text-white">Todos los eventos</h1>
+          <p className="text-gray-400 text-lg">Buscá tu carrera, filtrá por disciplina o zona, y encontrá el álbum donde están tus fotos.</p>
         </div>
 
-        {/* Info */}
-        <h1 className="text-2xl font-bold tracking-tight">{profile.full_name}</h1>
-        <p className="text-amber-500 font-medium text-sm mt-1">{profile.category}</p>
-        {profile.bio && <p className="text-neutral-400 text-sm mt-3 px-2">{profile.bio}</p>}
+        {/* BARRA DE BÚSQUEDA Y FILTROS */}
+        <div className="flex flex-col gap-4 mb-10">
+          <div className="relative w-full md:w-1/2">
+            <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Evento, ciudad o fotógrafo"
+              className="w-full bg-[#111] border border-[#333] rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-white transition-colors placeholder:text-gray-500"
+            />
+          </div>
 
-        {/* Enlaces Rápidos (Instagram / WhatsApp / QR) */}
-        <div className="flex gap-4 mt-6">
-          {profile.instagram_url && (
-            <a
-              href={profile.instagram_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram"
-              className="p-3 bg-neutral-900 rounded-full border border-neutral-800 text-neutral-300 hover:text-white hover:border-amber-500 transition-all"
+          <div className="flex flex-wrap gap-4 mt-2">
+            <button className="flex items-center justify-between bg-[#111] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-gray-300 hover:border-gray-500 w-48 transition-colors">
+              Todas las zonas <ChevronDown size={16} />
+            </button>
+            <button className="flex items-center justify-between bg-[#111] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-gray-300 hover:border-gray-500 w-48 transition-colors">
+              Todas las categorías <ChevronDown size={16} />
+            </button>
+            <button className="flex items-center justify-between bg-[#111] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-gray-300 hover:border-gray-500 w-48 transition-colors">
+              Más recientes <ChevronDown size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* CONTADOR DE EVENTOS */}
+        <div className="text-sm text-gray-500 mb-6 font-medium">
+          {eventos?.length || 0} eventos encontrados
+        </div>
+        
+        {/* GRID DE EVENTOS REALS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {eventos?.map((evento) => (
+            <Link 
+              key={evento.id} 
+              href={`/evento/${evento.id}`}
+              className="group relative rounded-2xl overflow-hidden bg-[#111] border border-[#222] hover:border-gray-600 transition-all cursor-pointer flex flex-col h-[340px]"
             >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-              </svg>
-            </a>
-          )}
-          {profile.whatsapp_number && (
-            <a
-              href={`https://wa.me/${profile.whatsapp_number}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="WhatsApp"
-              className="p-3 bg-neutral-900 rounded-full border border-neutral-800 text-neutral-300 hover:text-white hover:border-amber-500 transition-all"
-            >
-              <Phone className="w-5 h-5" />
-            </a>
-          )}
+              <div className="relative h-48 w-full bg-black overflow-hidden">
+                <div className="absolute top-3 left-3 flex gap-2 z-20">
+                  <span className="text-[10px] font-bold px-2 py-1 rounded bg-white text-black">Nuevo</span>
+                </div>
+                
+                <div className="w-full h-full bg-[#1a1a1a]" />
 
-          {/* Modal del Código QR */}
-          <QRCodeModal username={profile.username} />
-        </div>
+                <div className="absolute inset-0 z-10 pointer-events-none opacity-20 bg-[repeating-linear-gradient(45deg,transparent,transparent_20px,rgba(255,255,255,0.15)_20px,rgba(255,255,255,0.15)_40px)]"></div>
+                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                  <span className="text-white/20 font-black text-4xl -rotate-12 tracking-widest select-none">
+                    CAPTOME
+                  </span>
+                </div>
+              </div>
 
-        {/* Lista de Botones / Links */}
-        <div className="w-full mt-8 space-y-4">
-          {links && links.length > 0 ? (
-            links.map((link) => (
-              <a
-                key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-4 px-6 bg-neutral-900/90 border border-neutral-800 hover:border-amber-500/50 hover:bg-neutral-800/80 rounded-xl font-medium text-neutral-100 flex items-center justify-between transition-all group shadow-sm"
-              >
-                <span>{link.title}</span>
-                <Share2 className="w-4 h-4 text-neutral-500 group-hover:text-amber-500 transition-colors" />
-              </a>
-            ))
-          ) : (
-            <p className="text-neutral-500 text-sm py-4">No hay enlaces publicados aún.</p>
-          )}
+              <div className="p-5 flex flex-col flex-1 justify-between">
+                <div>
+                  <h3 className="font-bold text-lg text-white mb-1 uppercase truncate">{evento.titulo}</h3>
+                  <p className="text-gray-400 text-sm mb-3">{evento.fecha}</p>
+                  <p className="text-white text-sm font-semibold group-hover:underline flex items-center gap-1">Ver álbum <span className="opacity-0 group-hover:opacity-100 transition-opacity">→</span></p>
+                </div>
+                <p className="text-gray-500 text-xs mt-3 pt-3 border-t border-[#222]">
+                  Fotos de {evento.fotografo}
+                </p>
+              </div>
+            </Link>
+          ))}
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
