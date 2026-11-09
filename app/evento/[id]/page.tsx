@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -19,10 +19,12 @@ interface Foto {
   url: string;
   dorsal?: string;
   fotografo?: string;
+  precio?: number;
 }
 
 export default function EventoDetalle() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const eventoId = params?.id as string;
 
   const [evento, setEvento] = useState<Evento | null>(null);
@@ -30,23 +32,29 @@ export default function EventoDetalle() {
   const [busquedaDorsal, setBusquedaDorsal] = useState('');
   const [cargando, setCargando] = useState(true);
 
+  // Estado del Modal de Pago
+  const [fotoSeleccionada, setFotoSeleccionada] = useState<Foto | null>(null);
+  const [procesandoPago, setProcesandoPago] = useState(false);
+  const [pagoExitoso, setPagoExitoso] = useState(false);
+
   useEffect(() => {
+    // Si viene de un pago exitoso
+    if (searchParams?.get('pago') === 'exito') {
+      setPagoExitoso(true);
+    }
+
     if (!eventoId) return;
 
     async function cargarDatos() {
       try {
-        // 1. Obtener información del evento
         const { data: eventoData } = await supabase
           .from('eventos')
           .select('*')
           .eq('id', eventoId)
           .single();
 
-        if (eventoData) {
-          setEvento(eventoData);
-        }
+        if (eventoData) setEvento(eventoData);
 
-        // 2. Obtener fotos pertenecientes a este evento
         const { data: fotosData, error: fotosError } = await supabase
           .from('fotos')
           .select('*')
@@ -66,14 +74,37 @@ export default function EventoDetalle() {
     }
 
     cargarDatos();
-  }, [eventoId]);
+  }, [eventoId, searchParams]);
 
-  // Filtrado dinámico por número de dorsal
   const fotosFiltradas = fotos.filter((foto) => {
     if (!busquedaDorsal.trim()) return true;
     if (!foto.dorsal) return false;
     return foto.dorsal.toString().toLowerCase().includes(busquedaDorsal.trim().toLowerCase());
   });
+
+  const iniciarPago = async (foto: Foto) => {
+    setProcesandoPago(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fotoId: foto.id,
+          eventoId,
+          precio: foto.precio || 150,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      }
+    } catch (err) {
+      alert('Ocurrió un error al conectar con la pasarela de pagos.');
+    } finally {
+      setProcesandoPago(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -90,6 +121,12 @@ export default function EventoDetalle() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {pagoExitoso && (
+          <div className="mb-6 p-4 bg-green-950 border border-green-800 text-green-300 rounded-xl text-center font-semibold">
+            🎉 ¡Pago completado con éxito! Tu fotografía sin marca de agua se ha desbloqueado.
+          </div>
+        )}
+
         {/* Encabezado del Evento */}
         <div className="mb-8 border-b border-neutral-800 pb-8">
           <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">Galería de Evento</span>
@@ -123,9 +160,6 @@ export default function EventoDetalle() {
               </button>
             )}
           </div>
-          <p className="text-xs text-neutral-500 mt-2">
-            Ingresa tu número de corredor para mostrar únicamente tus fotos.
-          </p>
         </div>
 
         {/* Grid de Fotografías */}
@@ -152,7 +186,10 @@ export default function EventoDetalle() {
                   key={foto.id}
                   className="group relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col"
                 >
-                  <div className="aspect-[4/3] relative overflow-hidden bg-neutral-950">
+                  <div 
+                    className="aspect-[4/3] relative overflow-hidden bg-neutral-950 cursor-pointer"
+                    onClick={() => setFotoSeleccionada(foto)}
+                  >
                     <img
                       src={foto.url}
                       alt={foto.dorsal ? `Dorsal ${foto.dorsal}` : 'Foto de evento'}
@@ -166,9 +203,12 @@ export default function EventoDetalle() {
                   </div>
                   <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900">
                     <span className="text-xs text-neutral-400 truncate">
-                      {foto.fotografo ? `Por ${foto.fotografo}` : 'Foto Oficial'}
+                      ${foto.precio || 150} MXN
                     </span>
-                    <button className="bg-white text-black hover:bg-neutral-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">
+                    <button
+                      onClick={() => setFotoSeleccionada(foto)}
+                      className="bg-white text-black hover:bg-neutral-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    >
                       Comprar
                     </button>
                   </div>
@@ -178,6 +218,60 @@ export default function EventoDetalle() {
           </div>
         )}
       </main>
+
+      {/* Modal de Detalle y Pago */}
+      {fotoSeleccionada && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-2xl w-full overflow-hidden flex flex-col md:flex-row">
+            <div className="md:w-1/2 aspect-[4/3] bg-black relative">
+              <img
+                src={fotoSeleccionada.url}
+                alt="Vista previa"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="p-6 md:w-1/2 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Fotografía HD</span>
+                  <button
+                    onClick={() => setFotoSeleccionada(null)}
+                    className="text-neutral-400 hover:text-white font-bold text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <h3 className="text-xl font-bold mb-2">Comprar Foto Digital</h3>
+                <p className="text-xs text-neutral-400 mb-4">
+                  Incluye descarga instantánea en alta resolución sin marca de agua y licencia de uso personal.
+                </p>
+                <div className="text-2xl font-black text-green-400 mb-6">
+                  ${fotoSeleccionada.precio || 150} MXN
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => iniciarPago(fotoSeleccionada)}
+                  disabled={procesandoPago}
+                  className="w-full bg-white text-black font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {procesandoPago ? 'Procesando...' : 'Pagar con Tarjeta / Mercado Pago'}
+                </button>
+                <a
+                  href={fotoSeleccionada.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="w-full block text-center bg-neutral-800 text-neutral-300 font-semibold py-2.5 px-4 rounded-xl hover:bg-neutral-700 text-xs transition-colors"
+                >
+                  Descargar Vista Previa
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
