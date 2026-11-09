@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 interface Evento {
-  id: string;
+  id: string | number;
   nombre?: string;
   titulo?: string;
   fecha?: string;
@@ -15,7 +15,7 @@ interface Evento {
 }
 
 interface Foto {
-  id: string;
+  id: string | number;
   url: string;
   dorsal?: string;
   fotografo?: string;
@@ -42,7 +42,10 @@ export default function EventoDetalle() {
       const query = new URLSearchParams(window.location.search);
       if (query.get('pago') === 'exito') {
         setPagoExitoso(true);
-        setFotoCompradaId(query.get('foto'));
+        const fotoUrlParam = query.get('foto');
+        if (fotoUrlParam) {
+          setFotoCompradaId(String(fotoUrlParam));
+        }
       }
     }
 
@@ -92,7 +95,7 @@ export default function EventoDetalle() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fotoId: foto.id,
+          fotoId: String(foto.id),
           eventoId,
           precio: foto.precio || 150,
         }),
@@ -203,7 +206,8 @@ export default function EventoDetalle() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {fotosFiltradas.map((foto) => {
-                const esComprada = foto.id === fotoCompradaId;
+                // Comparación flexible convirtiendo ambos a String
+                const esComprada = Boolean(fotoCompradaId) && String(foto.id) === String(fotoCompradaId);
                 return (
                   <div
                     key={foto.id}
@@ -217,7 +221,7 @@ export default function EventoDetalle() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       
-                      {/* Mostrar Marca de Agua SOLO si NO ha sido comprada */}
+                      {/* Ocultar marca de agua si es la foto comprada */}
                       {!esComprada && (
                         <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
                           <div className="rotate-[-25deg] text-white/30 text-lg md:text-xl font-black tracking-widest uppercase select-none whitespace-nowrap border-2 border-white/20 px-3 py-1 rounded">
@@ -285,7 +289,7 @@ export default function EventoDetalle() {
                 alt="Vista previa"
                 className="w-full h-full object-cover"
               />
-              {fotoSeleccionada.id !== fotoCompradaId && (
+              {String(fotoSeleccionada.id) !== String(fotoCompradaId) && (
                 <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
                   <div className="rotate-[-25deg] text-white/35 text-xl font-black tracking-widest uppercase select-none border-2 border-white/25 px-4 py-1.5 rounded-lg">
                     CAPTOME • MUESTRA
@@ -297,7 +301,7 @@ export default function EventoDetalle() {
               <div>
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                    {fotoSeleccionada.id === fotoCompradaId ? 'Fotografía Adquirida' : 'Fotografía HD'}
+                    {String(fotoSeleccionada.id) === String(fotoCompradaId) ? 'Fotografía Adquirida' : 'Fotografía HD'}
                   </span>
                   <button
                     type="button"
@@ -308,20 +312,20 @@ export default function EventoDetalle() {
                   </button>
                 </div>
                 <h3 className="text-xl font-bold mb-2">
-                  {fotoSeleccionada.id === fotoCompradaId ? '¡Tu Foto está Lista!' : 'Comprar Foto Digital'}
+                  {String(fotoSeleccionada.id) === String(fotoCompradaId) ? '¡Tu Foto está Lista!' : 'Comprar Foto Digital'}
                 </h3>
                 <p className="text-xs text-neutral-400 mb-4">
-                  {fotoSeleccionada.id === fotoCompradaId
+                  {String(fotoSeleccionada.id) === String(fotoCompradaId)
                     ? 'Puedes descargar la imagen original en alta resolución sin marca de agua.'
                     : 'Incluye descarga instantánea en alta resolución sin marca de agua y licencia de uso personal.'}
                 </p>
                 <div className="text-2xl font-black text-green-400 mb-6">
-                  {fotoSeleccionada.id === fotoCompradaId ? '¡Comprada!' : `$${fotoSeleccionada.precio || 150} MXN`}
+                  {String(fotoSeleccionada.id) === String(fotoCompradaId) ? '¡Comprada!' : `$${fotoSeleccionada.precio || 150} MXN`}
                 </div>
               </div>
 
               <div className="space-y-3">
-                {fotoSeleccionada.id === fotoCompradaId ? (
+                {String(fotoSeleccionada.id) === String(fotoCompradaId) ? (
                   <button
                     type="button"
                     onClick={() => descargarFoto(fotoSeleccionada.url, `foto-${fotoSeleccionada.id}.jpg`)}
