@@ -35,12 +35,14 @@ export default function EventoDetalle() {
   const [fotoSeleccionada, setFotoSeleccionada] = useState<Foto | null>(null);
   const [procesandoPago, setProcesandoPago] = useState(false);
   const [pagoExitoso, setPagoExitoso] = useState(false);
+  const [fotoCompradaId, setFotoCompradaId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const query = new URLSearchParams(window.location.search);
       if (query.get('pago') === 'exito') {
         setPagoExitoso(true);
+        setFotoCompradaId(query.get('foto'));
       }
     }
 
@@ -104,6 +106,23 @@ export default function EventoDetalle() {
       alert('Ocurrió un error al conectar con la pasarela de pagos.');
     } finally {
       setProcesandoPago(false);
+    }
+  };
+
+  const descargarFoto = async (url: string, nombreArchivo: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = nombreArchivo || 'foto-captome.jpg';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, '_blank');
     }
   };
 
@@ -183,50 +202,74 @@ export default function EventoDetalle() {
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {fotosFiltradas.map((foto) => (
-                <div
-                  key={foto.id}
-                  onClick={() => setFotoSeleccionada(foto)}
-                  className="group relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col cursor-pointer"
-                >
-                  <div className="aspect-[4/3] relative overflow-hidden bg-neutral-950">
-                    <img
-                      src={foto.url}
-                      alt={foto.dorsal ? `Dorsal ${foto.dorsal}` : 'Foto de evento'}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    
-                    {/* Marca de Agua Superpuesta */}
-                    <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
-                      <div className="rotate-[-25deg] text-white/30 text-lg md:text-xl font-black tracking-widest uppercase select-none whitespace-nowrap border-2 border-white/20 px-3 py-1 rounded">
-                        CAPTOME • MUESTRA
-                      </div>
+              {fotosFiltradas.map((foto) => {
+                const esComprada = foto.id === fotoCompradaId;
+                return (
+                  <div
+                    key={foto.id}
+                    onClick={() => setFotoSeleccionada(foto)}
+                    className="group relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col cursor-pointer"
+                  >
+                    <div className="aspect-[4/3] relative overflow-hidden bg-neutral-950">
+                      <img
+                        src={foto.url}
+                        alt={foto.dorsal ? `Dorsal ${foto.dorsal}` : 'Foto de evento'}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      
+                      {/* Mostrar Marca de Agua SOLO si NO ha sido comprada */}
+                      {!esComprada && (
+                        <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
+                          <div className="rotate-[-25deg] text-white/30 text-lg md:text-xl font-black tracking-widest uppercase select-none whitespace-nowrap border-2 border-white/20 px-3 py-1 rounded">
+                            CAPTOME • MUESTRA
+                          </div>
+                        </div>
+                      )}
+
+                      {esComprada && (
+                        <span className="absolute top-2 right-2 z-10 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-md shadow">
+                          ✓ Adquirida
+                        </span>
+                      )}
+
+                      {foto.dorsal && (
+                        <span className="absolute top-2 left-2 z-10 bg-black/80 backdrop-blur text-white text-xs font-bold px-2.5 py-1 rounded-md border border-neutral-700">
+                          #{foto.dorsal}
+                        </span>
+                      )}
                     </div>
 
-                    {foto.dorsal && (
-                      <span className="absolute top-2 left-2 z-10 bg-black/80 backdrop-blur text-white text-xs font-bold px-2.5 py-1 rounded-md border border-neutral-700">
-                        #{foto.dorsal}
+                    <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900 z-10">
+                      <span className="text-xs text-neutral-400 truncate">
+                        {foto.fotografo ? `Por ${foto.fotografo}` : 'Foto Oficial'}
                       </span>
-                    )}
+                      {esComprada ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            descargarFoto(foto.url, `foto-${foto.id}.jpg`);
+                          }}
+                          className="bg-green-500 text-black hover:bg-green-400 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Descargar HD
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFotoSeleccionada(foto);
+                          }}
+                          className="bg-white text-black hover:bg-neutral-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Comprar
+                        </button>
+                      )}
+                    </div>
                   </div>
-
-                  <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900 z-10">
-                    <span className="text-xs text-neutral-400 truncate">
-                      {foto.fotografo ? `Por ${foto.fotografo}` : 'Foto Oficial'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFotoSeleccionada(foto);
-                      }}
-                      className="bg-white text-black hover:bg-neutral-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Comprar
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -242,16 +285,20 @@ export default function EventoDetalle() {
                 alt="Vista previa"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
-                <div className="rotate-[-25deg] text-white/35 text-xl font-black tracking-widest uppercase select-none border-2 border-white/25 px-4 py-1.5 rounded-lg">
-                  CAPTOME • MUESTRA
+              {fotoSeleccionada.id !== fotoCompradaId && (
+                <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
+                  <div className="rotate-[-25deg] text-white/35 text-xl font-black tracking-widest uppercase select-none border-2 border-white/25 px-4 py-1.5 rounded-lg">
+                    CAPTOME • MUESTRA
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             <div className="p-6 md:w-1/2 flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-start mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Fotografía HD</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                    {fotoSeleccionada.id === fotoCompradaId ? 'Fotografía Adquirida' : 'Fotografía HD'}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setFotoSeleccionada(null)}
@@ -260,24 +307,38 @@ export default function EventoDetalle() {
                     ✕
                   </button>
                 </div>
-                <h3 className="text-xl font-bold mb-2">Comprar Foto Digital</h3>
+                <h3 className="text-xl font-bold mb-2">
+                  {fotoSeleccionada.id === fotoCompradaId ? '¡Tu Foto está Lista!' : 'Comprar Foto Digital'}
+                </h3>
                 <p className="text-xs text-neutral-400 mb-4">
-                  Incluye descarga instantánea en alta resolución sin marca de agua y licencia de uso personal.
+                  {fotoSeleccionada.id === fotoCompradaId
+                    ? 'Puedes descargar la imagen original en alta resolución sin marca de agua.'
+                    : 'Incluye descarga instantánea en alta resolución sin marca de agua y licencia de uso personal.'}
                 </p>
                 <div className="text-2xl font-black text-green-400 mb-6">
-                  ${fotoSeleccionada.precio || 150} MXN
+                  {fotoSeleccionada.id === fotoCompradaId ? '¡Comprada!' : `$${fotoSeleccionada.precio || 150} MXN`}
                 </div>
               </div>
 
               <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => iniciarPago(fotoSeleccionada)}
-                  disabled={procesandoPago}
-                  className="w-full bg-white text-black font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer text-sm"
-                >
-                  {procesandoPago ? 'Procesando...' : 'Pagar con Tarjeta / Mercado Pago'}
-                </button>
+                {fotoSeleccionada.id === fotoCompradaId ? (
+                  <button
+                    type="button"
+                    onClick={() => descargarFoto(fotoSeleccionada.url, `foto-${fotoSeleccionada.id}.jpg`)}
+                    className="w-full bg-green-500 text-black font-bold py-3 px-4 rounded-xl hover:bg-green-400 transition-colors cursor-pointer text-sm"
+                  >
+                    Descargar Original HD
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => iniciarPago(fotoSeleccionada)}
+                    disabled={procesandoPago}
+                    className="w-full bg-white text-black font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer text-sm"
+                  >
+                    {procesandoPago ? 'Procesando...' : 'Pagar con Tarjeta / Mercado Pago'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setFotoSeleccionada(null)}
