@@ -1,206 +1,183 @@
-"use client";
+'use client';
 
-import { useEffect, useState, use } from "react";
-import { ShoppingCart, ArrowLeft, X, Check, Download, ShieldAlert } from "lucide-react";
-import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+interface Evento {
+  id: string;
+  nombre?: string;
+  titulo?: string;
+  fecha?: string;
+  lugar?: string;
+  fotografo?: string;
+}
 
-export default function AlbumDeEvento({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const [evento, setEvento] = useState<any>(null);
-  const [fotos, setFotos] = useState<any[]>([]);
+interface Foto {
+  id: string;
+  url: string;
+  dorsal?: string;
+  fotografo?: string;
+}
+
+export default function EventoDetalle() {
+  const params = useParams();
+  const eventoId = params?.id as string;
+
+  const [evento, setEvento] = useState<Evento | null>(null);
+  const [fotos, setFotos] = useState<Foto[]>([]);
+  const [busquedaDorsal, setBusquedaDorsal] = useState('');
   const [cargando, setCargando] = useState(true);
-  const [fotoSeleccionada, setFotoSeleccionada] = useState<any>(null);
-  const [comprada, setComprada] = useState(false);
 
   useEffect(() => {
+    if (!eventoId) return;
+
     async function cargarDatos() {
-      const { data: dataEvento } = await supabase
-        .from("eventos")
-        .select("*")
-        .eq("id", id)
-        .single();
+      try {
+        // 1. Obtener información del evento
+        const { data: eventoData } = await supabase
+          .from('eventos')
+          .select('*')
+          .eq('id', eventoId)
+          .single();
 
-      const { data: dataFotos } = await supabase
-        .from("fotos")
-        .select("*")
-        .eq("evento_id", id);
+        if (eventoData) {
+          setEvento(eventoData);
+        }
 
-      setEvento(dataEvento);
-      setFotos(dataFotos || []);
-      setCargando(false);
+        // 2. Obtener fotos pertenecientes a este evento
+        const { data: fotosData, error: fotosError } = await supabase
+          .from('fotos')
+          .select('*')
+          .eq('evento_id', eventoId)
+          .order('created_at', { ascending: false });
+
+        if (fotosError) {
+          console.error('Error cargando fotos:', fotosError);
+        } else if (fotosData) {
+          setFotos(fotosData);
+        }
+      } catch (err) {
+        console.error('Error:', err);
+      } finally {
+        setCargando(false);
+      }
     }
 
     cargarDatos();
-  }, [id]);
+  }, [eventoId]);
 
-  if (cargando) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center">
-        <p className="text-gray-400 animate-pulse">Cargando galería...</p>
-      </div>
-    );
-  }
-
-  if (!evento) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center">
-        <h1 className="text-2xl font-bold mb-4">Evento no encontrado</h1>
-        <Link href="/" className="text-gray-400 hover:text-white underline">
-          Volver al catálogo
-        </Link>
-      </div>
-    );
-  }
+  // Filtrado dinámico por número de dorsal
+  const fotosFiltradas = fotos.filter((foto) => {
+    if (!busquedaDorsal.trim()) return true;
+    if (!foto.dorsal) return false;
+    return foto.dorsal.toString().toLowerCase().includes(busquedaDorsal.trim().toLowerCase());
+  });
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans select-none">
-      <header className="sticky top-0 z-40 flex items-center justify-between px-6 py-4 bg-[#0a0a0a]/90 backdrop-blur-md border-b border-[#222]">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={24} />
+    <div className="min-h-screen bg-black text-white">
+      {/* Navegación */}
+      <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-black tracking-wider text-white hover:opacity-80">
+            captome
           </Link>
-          <div>
-            <h1 className="text-xl font-bold uppercase tracking-tight">{evento.titulo}</h1>
-            <p className="text-xs text-gray-400">{evento.fecha} • Fotos de {evento.fotografo}</p>
-          </div>
+          <Link href="/" className="text-sm font-medium text-neutral-400 hover:text-white">
+            ← Volver al catálogo
+          </Link>
         </div>
-        <button className="bg-white text-black p-2 rounded-full hover:bg-gray-200 transition-colors">
-          <ShoppingCart size={20} />
-        </button>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {fotos.length === 0 ? (
-          <div className="text-center py-20 text-gray-500">
-            Aún no hay fotos subidas para este evento.
+        {/* Encabezado del Evento */}
+        <div className="mb-8 border-b border-neutral-800 pb-8">
+          <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">Galería de Evento</span>
+          <h1 className="text-3xl md:text-5xl font-extrabold mt-1">
+            {evento?.nombre || evento?.titulo || 'Evento Deportivo'}
+          </h1>
+          <p className="text-neutral-400 text-sm mt-2">
+            {evento?.fecha || 'Reciente'} {evento?.lugar ? `• ${evento.lugar}` : ''}
+          </p>
+        </div>
+
+        {/* Buscador por Dorsal */}
+        <div className="mb-10 bg-neutral-900 border border-neutral-800 p-6 rounded-2xl max-w-xl">
+          <label className="block text-sm font-bold text-neutral-200 mb-2">
+            🔍 Buscar por tu Número de Dorsal
+          </label>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              placeholder="Ejemplo: 412, 1089"
+              value={busquedaDorsal}
+              onChange={(e) => setBusquedaDorsal(e.target.value)}
+              className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-base text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 transition-colors"
+            />
+            {busquedaDorsal && (
+              <button
+                onClick={() => setBusquedaDorsal('')}
+                className="bg-neutral-800 hover:bg-neutral-700 text-xs px-4 py-3 rounded-xl font-semibold transition-colors"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-neutral-500 mt-2">
+            Ingresa tu número de corredor para mostrar únicamente tus fotos.
+          </p>
+        </div>
+
+        {/* Grid de Fotografías */}
+        {cargando ? (
+          <div className="py-20 text-center text-neutral-500">Cargando fotografías...</div>
+        ) : fotosFiltradas.length === 0 ? (
+          <div className="py-20 text-center text-neutral-500 bg-neutral-950 border border-neutral-800 rounded-2xl">
+            {busquedaDorsal ? (
+              <p className="text-base">No se encontraron fotos con el dorsal <span className="text-white font-bold">"{busquedaDorsal}"</span>.</p>
+            ) : (
+              <p className="text-base">Aún no hay fotos registradas para este evento.</p>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {fotos.map((foto) => (
-              <div 
-                key={foto.id} 
-                onClick={() => { setFotoSeleccionada(foto); setComprada(false); }}
-                className="group relative aspect-[4/3] bg-[#111] rounded-xl overflow-hidden border border-[#222] hover:border-white transition-all cursor-pointer"
-              >
-                <img 
-                  src={foto.url} 
-                  alt="Foto de evento" 
-                  onContextMenu={(e) => e.preventDefault()}
-                  onDragStart={(e) => e.preventDefault()}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 pointer-events-none"
-                />
-                
-                {/* MARCA DE AGUA EN GRILLA PARA LA MINIATURA */}
-                <div className="absolute inset-0 z-10 pointer-events-none opacity-30 bg-[repeating-linear-gradient(-45deg,transparent,transparent_20px,rgba(255,255,255,0.15)_20px,rgba(255,255,255,0.15)_40px)]" />
-                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none opacity-30">
-                  <span className="text-white font-black text-2xl -rotate-12 tracking-widest select-none">
-                    CAPTOME
-                  </span>
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-sm text-neutral-400 font-medium">
+                Mostrando {fotosFiltradas.length} foto(s)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {fotosFiltradas.map((foto) => (
+                <div
+                  key={foto.id}
+                  className="group relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col"
+                >
+                  <div className="aspect-[4/3] relative overflow-hidden bg-neutral-950">
+                    <img
+                      src={foto.url}
+                      alt={foto.dorsal ? `Dorsal ${foto.dorsal}` : 'Foto de evento'}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {foto.dorsal && (
+                      <span className="absolute top-2 left-2 bg-black/80 backdrop-blur text-white text-xs font-bold px-2.5 py-1 rounded-md border border-neutral-700">
+                        #{foto.dorsal}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900">
+                    <span className="text-xs text-neutral-400 truncate">
+                      {foto.fotografo ? `Por ${foto.fotografo}` : 'Foto Oficial'}
+                    </span>
+                    <button className="bg-white text-black hover:bg-neutral-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">
+                      Comprar
+                    </button>
+                  </div>
                 </div>
-
-                <div className="absolute bottom-3 right-3 z-20">
-                  <span className="bg-black/80 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full border border-white/20">
-                    ${foto.precio || "150"} MXN
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </main>
-
-      {/* MODAL CON PROTECCIÓN AVANZADA */}
-      {fotoSeleccionada && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 md:p-8">
-          <div className="relative max-w-5xl w-full max-h-[90vh] bg-[#111] border border-[#333] rounded-2xl overflow-hidden flex flex-col md:flex-row">
-            
-            <button 
-              onClick={() => setFotoSeleccionada(null)}
-              className="absolute top-4 right-4 z-30 bg-black/70 text-white p-2 rounded-full hover:bg-white hover:text-black transition-colors"
-            >
-              <X size={20} />
-            </button>
-
-            {/* ÁREA DE IMAGEN CON MARCA DE AGUA MULTICAPA Y BLOQUEOS */}
-            <div className="relative flex-1 bg-black flex items-center justify-center p-4 min-h-[250px] max-h-[55vh] md:max-h-[90vh] overflow-hidden select-none">
-              <img 
-                src={fotoSeleccionada.url} 
-                alt="Vista previa protegida"
-                onContextMenu={(e) => e.preventDefault()}
-                onDragStart={(e) => e.preventDefault()}
-                className="max-h-full max-w-full object-contain pointer-events-none"
-              />
-              
-              {!comprada && (
-                <>
-                  {/* Capa 1: Rayado de seguridad */}
-                  <div className="absolute inset-0 z-10 pointer-events-none opacity-25 bg-[repeating-linear-gradient(-45deg,transparent,transparent_25px,rgba(255,255,255,0.2)_25px,rgba(255,255,255,0.2)_50px)]" />
-                  
-                  {/* Capa 2: Malla repetida de texto CAPTOME */}
-                  <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-around items-center opacity-35 select-none overflow-hidden -rotate-12">
-                    <div className="text-white font-black text-xl md:text-3xl tracking-[0.3em] flex gap-12 whitespace-nowrap">
-                      <span>CAPTOME</span><span>CAPTOME</span><span>CAPTOME</span>
-                    </div>
-                    <div className="text-white font-black text-xl md:text-3xl tracking-[0.3em] flex gap-12 whitespace-nowrap">
-                      <span>CAPTOME</span><span>CAPTOME</span><span>CAPTOME</span>
-                    </div>
-                    <div className="text-white font-black text-xl md:text-3xl tracking-[0.3em] flex gap-12 whitespace-nowrap">
-                      <span>CAPTOME</span><span>CAPTOME</span><span>CAPTOME</span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* PANEL LATERAL DE COMPRA */}
-            <div className="w-full md:w-80 p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l border-[#222] bg-[#111] shrink-0">
-              <div>
-                <div className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold mb-2">
-                  <ShieldAlert size={14} /> Vista previa protegida
-                </div>
-                <h3 className="text-lg font-bold text-white mb-1">Foto Digital HD</h3>
-                <p className="text-sm text-gray-400 mb-6">Descarga inmediata limpia y en máxima calidad al realizar tu pago.</p>
-                
-                <div className="text-3xl font-extrabold text-white mb-6">
-                  ${fotoSeleccionada.precio || "150"} <span className="text-sm text-gray-400 font-normal">MXN</span>
-                </div>
-              </div>
-
-              <div>
-                {!comprada ? (
-                  <button 
-                    onClick={() => setComprada(true)}
-                    className="w-full bg-white text-black font-bold py-3 px-4 rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <ShoppingCart size={18} /> Simular Compra
-                  </button>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-green-400 text-sm font-semibold">
-                      <Check size={18} /> ¡Foto adquirida!
-                    </div>
-                    <a 
-                      href={fotoSeleccionada.url} 
-                      target="_blank" 
-                      download 
-                      className="w-full bg-green-500 text-black font-bold py-3 px-4 rounded-xl hover:bg-green-400 transition-colors flex items-center justify-center gap-2 text-center"
-                    >
-                      <Download size={18} /> Descargar en HD
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
     </div>
   );
 }
