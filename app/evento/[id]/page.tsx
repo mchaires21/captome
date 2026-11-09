@@ -204,46 +204,46 @@ export default function EventoDetalle() {
                 Mostrando {fotosFiltradas.length} foto(s)
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {fotosFiltradas.map((foto) => {
-                // Comparación flexible convirtiendo ambos a String
                 const esComprada = Boolean(fotoCompradaId) && String(foto.id) === String(fotoCompradaId);
                 return (
                   <div
                     key={foto.id}
                     onClick={() => setFotoSeleccionada(foto)}
-                    className="group relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col cursor-pointer"
+                    className="group relative bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col cursor-pointer"
                   >
-                    <div className="aspect-[4/3] relative overflow-hidden bg-neutral-950">
+                    {/* Contenedor Cuadrado con Imagen Centrada (sin recortar) */}
+                    <div className="w-full aspect-square relative bg-neutral-950 flex items-center justify-center p-2">
                       <img
                         src={foto.url}
                         alt={foto.dorsal ? `Dorsal ${foto.dorsal}` : 'Foto de evento'}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="max-w-full max-h-full object-contain rounded-lg group-hover:scale-102 transition-transform duration-300"
                       />
                       
-                      {/* Ocultar marca de agua si es la foto comprada */}
+                      {/* Marca de Agua Superpuesta */}
                       {!esComprada && (
                         <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
-                          <div className="rotate-[-25deg] text-white/30 text-lg md:text-xl font-black tracking-widest uppercase select-none whitespace-nowrap border-2 border-white/20 px-3 py-1 rounded">
+                          <div className="rotate-[-25deg] text-white/30 text-lg font-black tracking-widest uppercase select-none whitespace-nowrap border-2 border-white/20 px-3 py-1 rounded">
                             CAPTOME • MUESTRA
                           </div>
                         </div>
                       )}
 
                       {esComprada && (
-                        <span className="absolute top-2 right-2 z-10 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-md shadow">
+                        <span className="absolute top-3 right-3 z-10 bg-green-600 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow">
                           ✓ Adquirida
                         </span>
                       )}
 
                       {foto.dorsal && (
-                        <span className="absolute top-2 left-2 z-10 bg-black/80 backdrop-blur text-white text-xs font-bold px-2.5 py-1 rounded-md border border-neutral-700">
+                        <span className="absolute top-3 left-3 z-10 bg-black/80 backdrop-blur text-white text-xs font-bold px-2.5 py-1 rounded-md border border-neutral-700">
                           #{foto.dorsal}
                         </span>
                       )}
                     </div>
 
-                    <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900 z-10">
+                    <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900 border-t border-neutral-800/60 z-10">
                       <span className="text-xs text-neutral-400 truncate">
                         {foto.fotografo ? `Por ${foto.fotografo}` : 'Foto Oficial'}
                       </span>
@@ -282,12 +282,12 @@ export default function EventoDetalle() {
       {/* Modal de Detalle y Pago */}
       {fotoSeleccionada && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-2xl w-full overflow-hidden flex flex-col md:flex-row">
-            <div className="md:w-1/2 aspect-[4/3] bg-black relative flex items-center justify-center overflow-hidden">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-2xl w-full overflow-hidden flex flex-col md:flex-row max-h-[90vh]">
+            <div className="md:w-1/2 min-h-[300px] bg-black relative flex items-center justify-center p-4">
               <img
                 src={fotoSeleccionada.url}
                 alt="Vista previa"
-                className="w-full h-full object-cover"
+                className="max-w-full max-h-[60vh] md:max-h-[70vh] object-contain rounded-lg"
               />
               {String(fotoSeleccionada.id) !== String(fotoCompradaId) && (
                 <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
@@ -297,7 +297,7 @@ export default function EventoDetalle() {
                 </div>
               )}
             </div>
-            <div className="p-6 md:w-1/2 flex flex-col justify-between">
+            <div className="p-6 md:w-1/2 flex flex-col justify-between bg-neutral-900">
               <div>
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
