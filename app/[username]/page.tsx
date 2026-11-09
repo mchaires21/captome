@@ -2,12 +2,15 @@ import { supabase } from '@/lib/supabase';
 import { notFound } from 'next/navigation';
 import QRCodeModal from '@/components/QRCodeModal';
 import { MessageCircle, Globe } from 'lucide-react';
+import { connection } from 'next/server';
 
 export default async function UserProfile({
   params,
 }: {
   params: Promise<{ username: string }> | { username: string };
 }) {
+  await connection();
+
   const resolvedParams = await params;
   const username = resolvedParams.username;
 
