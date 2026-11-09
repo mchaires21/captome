@@ -1,211 +1,232 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { PlusCircle, Image as ImageIcon, CheckCircle, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+interface Evento {
+  id: string;
+  nombre?: string;
+  titulo?: string;
+}
 
-export default function PanelFotografo() {
-  const [eventos, setEventos] = useState<any[]>([]);
-  const [mensaje, setMensaje] = useState("");
-  
-  // Formulario de Evento
-  const [titulo, setTitulo] = useState("");
-  const [fecha, setFecha] = useState("");
-  const [fotografo, setFotografo] = useState("");
-
-  // Formulario de Foto
-  const [eventoSeleccionado, setEventoSeleccionado] = useState("");
-  const [urlFoto, setUrlFoto] = useState("");
-  const [precioFoto, setPrecioFoto] = useState("150");
+export default function SubirFotos() {
+  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [eventoSeleccionado, setEventoSeleccionado] = useState('');
+  const [archivos, setArchivos] = useState<FileList | null>(null);
+  const [dorsal, setDorsal] = useState('');
+  const [fotografo, setFotografo] = useState('');
+  const [subiendo, setSubiendo] = useState(false);
+  const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
 
   useEffect(() => {
+    async function cargarEventos() {
+      const { data, error } = await supabase.from('eventos').select('id, nombre, titulo');
+      if (error) {
+        console.error('Error cargando eventos:', error);
+      } else if (data) {
+        setEventos(data);
+        if (data.length > 0) setEventoSeleccionado(data[0].id);
+      }
+    }
     cargarEventos();
   }, []);
 
-  async function cargarEventos() {
-    const { data } = await supabase.from("eventos").select("*").order("id", { ascending: false });
-    setEventos(data || []);
-    if (data && data.length > 0 && !eventoSeleccionado) {
-      setEventoSeleccionado(data[0].id.toString());
-    }
-  }
-
-  async function crearEvento(e: React.FormEvent) {
+  const handleSubida = async (e: FormEvent) => {
     e.preventDefault();
-    if (!titulo || !fecha || !fotografo) return;
-
-    const { error } = await supabase
-      .from("eventos")
-      .insert([{ titulo, fecha, fotografo }]);
-
-    if (error) {
-      setMensaje("Error al crear el evento: " + error.message);
-    } else {
-      setMensaje("¡Evento creado con éxito!");
-      setTitulo("");
-      setFecha("");
-      setFotografo("");
-      cargarEventos();
+    if (!archivos || archivos.length === 0) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona al menos una foto.' });
+      return;
     }
-  }
 
-  async function agregarFoto(e: React.FormEvent) {
-    e.preventDefault();
-    if (!urlFoto || !eventoSeleccionado) return;
-
-    const { error } = await supabase
-      .from("fotos")
-      .insert([{ 
-        evento_id: parseInt(eventoSeleccionado), 
-        url: urlFoto, 
-        precio: parseFloat(precioFoto) 
-      }]);
-
-    if (error) {
-      setMensaje("Error al subir foto: " + error.message);
-    } else {
-      setMensaje("¡Foto agregada al evento correctamente!");
-      setUrlFoto("");
+    if (!eventoSeleccionado) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona un evento.' });
+      return;
     }
-  }
+
+    // Límite de 10 MB por archivo
+    const LIMITE_MB = 10;
+    const LIMITE_BYTES = LIMITE_MB * 1024 * 1024;
+
+    for (let i = 0; i < archivos.length; i++) {
+      if (archivos[i].size > LIMITE_BYTES) {
+        setMensaje({
+          tipo: 'error',
+          texto: `La foto "${archivos[i].name}" supera el límite de ${LIMITE_MB} MB. Por favor comprímela antes de subirla.`,
+        });
+        return;
+      }
+    }
+
+    setSubiendo(true);
+    setMensaje(null);
+
+    let subidasExitosas = 0;
+
+    try {
+      for (let i = 0; i < archivos.length; i++) {
+        const archivo = archivos[i];
+        const extension = archivo.name.split('.').pop();
+        const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${extension}`;
+        const rutaArchivo = `${eventoSeleccionado}/${nombreArchivo}`;
+
+        // 1. Subir a Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('fotos-bucket')
+          .upload(rutaArchivo, archivo, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error('Error al subir archivo:', uploadError.message);
+          continue;
+        }
+
+        // 2. Obtener URL pública
+        const { data: urlData } = supabase.storage
+          .from('fotos-bucket')
+          .getPublicUrl(rutaArchivo);
+
+        const urlPublica = urlData.publicUrl;
+
+        // 3. Registrar en la base de datos
+        const { error: dbError } = await supabase.from('fotos').insert([
+          {
+            evento_id: eventoSeleccionado,
+            url: urlPublica,
+            dorsal: dorsal ? dorsal.trim() : null,
+            fotografo: fotografo ? fotografo.trim() : null,
+          },
+        ]);
+
+        if (dbError) {
+          console.error('Error al guardar en base de datos:', dbError.message);
+        } else {
+          subidasExitosas++;
+        }
+      }
+
+      if (subidasExitosas > 0) {
+        setMensaje({
+          tipo: 'exito',
+          texto: `¡Se subieron ${subidasExitosas} foto(s) correctamente!`,
+        });
+        setArchivos(null);
+        setDorsal('');
+      } else {
+        setMensaje({
+          tipo: 'error',
+          texto: 'No se pudo subir ninguna foto. Verifica que el bucket "fotos-bucket" sea público en Supabase.',
+        });
+      }
+    } catch (err: any) {
+      setMensaje({ tipo: 'error', texto: err.message || 'Ocurrió un error inesperado.' });
+    } finally {
+      setSubiendo(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-8 font-sans">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-4 mb-8">
-          <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={24} />
+    <div className="min-h-screen bg-black text-white">
+      {/* Navegación */}
+      <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-black tracking-wider text-white hover:opacity-80">
+            captome
           </Link>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Panel del Fotógrafo</h1>
-            <p className="text-gray-400 text-sm">Gestiona tus eventos y sube nuevas fotografías.</p>
-          </div>
+          <Link href="/" className="text-sm font-medium text-neutral-400 hover:text-white">
+            ← Volver al catálogo
+          </Link>
+        </div>
+      </header>
+
+      {/* Formulario */}
+      <main className="max-w-2xl mx-auto px-4 py-12">
+        <div className="mb-8">
+          <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">Panel Fotógrafo</span>
+          <h1 className="text-3xl font-extrabold mt-1">Cargar Fotografías</h1>
+          <p className="text-neutral-400 text-sm mt-1">
+            Sube las imágenes directamente desde tu dispositivo a la plataforma (Máximo 10 MB por foto).
+          </p>
         </div>
 
         {mensaje && (
-          <div className="mb-6 p-4 rounded-xl bg-white/10 border border-white/20 text-white flex items-center gap-2">
-            <CheckCircle className="text-green-400" size={20} />
-            <span>{mensaje}</span>
+          <div
+            className={`p-4 rounded-lg mb-6 text-sm font-semibold ${
+              mensaje.tipo === 'exito' ? 'bg-green-950 text-green-300 border border-green-800' : 'bg-red-950 text-red-300 border border-red-800'
+            }`}
+          >
+            {mensaje.texto}
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* SECCIÓN 1: CREAR EVENTO */}
-          <div className="bg-[#111] border border-[#222] rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-6 text-xl font-bold">
-              <PlusCircle className="text-white" size={22} />
-              <h2>1. Crear Nuevo Evento</h2>
-            </div>
-            
-            <form onSubmit={crearEvento} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase">Título del Evento</label>
-                <input
-                  type="text"
-                  placeholder="Ej: MARATÓN MONTERREY 2026"
-                  value={titulo}
-                  onChange={(e) => setTitulo(e.target.value)}
-                  className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm focus:outline-none focus:border-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase">Fecha / Ubicación</label>
-                <input
-                  type="text"
-                  placeholder="Ej: 15 nov - MONTERREY"
-                  value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
-                  className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm focus:outline-none focus:border-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase">Nombre del Fotógrafo</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Yolanda Pérez"
-                  value={fotografo}
-                  onChange={(e) => setFotografo(e.target.value)}
-                  className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm focus:outline-none focus:border-white"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Guardar Evento
-              </button>
-            </form>
+        <form onSubmit={handleSubida} className="space-y-6 bg-neutral-900 border border-neutral-800 p-6 rounded-xl">
+          {/* Seleccionar Evento */}
+          <div>
+            <label className="block text-sm font-bold text-neutral-300 mb-2">Seleccionar Evento</label>
+            <select
+              value={eventoSeleccionado}
+              onChange={(e) => setEventoSeleccionado(e.target.value)}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+              required
+            >
+              {eventos.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.nombre || ev.titulo || 'Evento sin nombre'}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* SECCIÓN 2: AGREGAR FOTO A UN EVENTO */}
-          <div className="bg-[#111] border border-[#222] rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-6 text-xl font-bold">
-              <ImageIcon className="text-white" size={22} />
-              <h2>2. Subir Fotos al Album</h2>
-            </div>
-
-            <form onSubmit={agregarFoto} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase">Seleccionar Evento</label>
-                <select
-                  value={eventoSeleccionado}
-                  onChange={(e) => setEventoSeleccionado(e.target.value)}
-                  className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm focus:outline-none focus:border-white"
-                >
-                  {eventos.map((ev) => (
-                    <option key={ev.id} value={ev.id}>
-                      {ev.titulo} (ID: {ev.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase">URL de la Imagen</label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={urlFoto}
-                  onChange={(e) => setUrlFoto(e.target.value)}
-                  className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm focus:outline-none focus:border-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase">Precio (MXN)</label>
-                <input
-                  type="number"
-                  placeholder="150"
-                  value={precioFoto}
-                  onChange={(e) => setPrecioFoto(e.target.value)}
-                  className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-sm focus:outline-none focus:border-white"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Vincular Foto
-              </button>
-            </form>
+          {/* Seleccionar Archivos */}
+          <div>
+            <label className="block text-sm font-bold text-neutral-300 mb-2">Fotos (JPG, PNG - Máx. 10 MB cada una)</label>
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setArchivos(e.target.files)}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-3 text-sm text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white file:text-black hover:file:bg-neutral-200 cursor-pointer"
+              required
+            />
           </div>
-        </div>
-      </div>
+
+          {/* Número de Dorsal / Corredor */}
+          <div>
+            <label className="block text-sm font-bold text-neutral-300 mb-1">Dorsal / Número de Corredor (Opcional)</label>
+            <span className="text-xs text-neutral-500 block mb-2">Ejemplo: 412, 1089</span>
+            <input
+              type="text"
+              placeholder="Número de corredor"
+              value={dorsal}
+              onChange={(e) => setDorsal(e.target.value)}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+            />
+          </div>
+
+          {/* Fotógrafo */}
+          <div>
+            <label className="block text-sm font-bold text-neutral-300 mb-2">Nombre del Fotógrafo (Opcional)</label>
+            <input
+              type="text"
+              placeholder="Tu nombre o estudio"
+              value={fotografo}
+              onChange={(e) => setFotografo(e.target.value)}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+            />
+          </div>
+
+          {/* Botón de Enviar */}
+          <button
+            type="submit"
+            disabled={subiendo}
+            className="w-full bg-white text-black font-bold py-3 px-6 rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50"
+          >
+            {subiendo ? 'Subiendo fotos a Supabase...' : 'Subir fotos'}
+          </button>
+        </form>
+      </main>
     </div>
   );
 }
