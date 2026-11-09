@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+// Inicialización de Stripe sin forzar apiVersion rígida
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN!,
@@ -14,18 +13,18 @@ export async function POST(request: Request) {
   try {
     const { photoId, gateway, price, title } = await request.json();
     
-    // Detecta automáticamente el dominio en el que se ejecuta (local o Vercel)
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_BASE_URL || 'https://captome-app.vercel.app';
 
-    // 1. Redirección oficial a Stripe
+    // 1. Redirección a Stripe
     if (gateway === 'stripe') {
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
         line_items: [
           {
             price_data: {
               currency: 'mxn',
-              product_data: { name: title || 'Fotografía Captome' },
+              product_data: {
+                name: title || 'Fotografía Captome',
+              },
               unit_amount: Math.round((price || 50) * 100),
             },
             quantity: 1,
@@ -39,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ url: session.url });
     }
 
-    // 2. Redirección oficial a Mercado Pago
+    // 2. Redirección a Mercado Pago
     if (gateway === 'mercadopago') {
       const preference = new Preference(mpClient);
       const res = await preference.create({
