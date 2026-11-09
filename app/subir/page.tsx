@@ -16,17 +16,27 @@ export default function SubirFotos() {
   const [archivos, setArchivos] = useState<FileList | null>(null);
   const [dorsal, setDorsal] = useState('');
   const [fotografo, setFotografo] = useState('');
+  const [cargandoEventos, setCargandoEventos] = useState(true);
   const [subiendo, setSubiendo] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
 
   useEffect(() => {
     async function cargarEventos() {
-      const { data, error } = await supabase.from('eventos').select('id, nombre, titulo');
-      if (error) {
-        console.error('Error cargando eventos:', error);
-      } else if (data) {
-        setEventos(data);
-        if (data.length > 0) setEventoSeleccionado(data[0].id);
+      try {
+        const { data, error } = await supabase.from('eventos').select('*');
+        if (error) {
+          console.error('Error cargando eventos:', error);
+          setMensaje({ tipo: 'error', texto: 'Error al conectar con la base de datos de eventos.' });
+        } else if (data && data.length > 0) {
+          setEventos(data);
+          setEventoSeleccionado(data[0].id);
+        } else {
+          setMensaje({ tipo: 'error', texto: 'No hay eventos creados. Crea uno primero en Supabase.' });
+        }
+      } catch (err) {
+        console.error('Error:', err);
+      } finally {
+        setCargandoEventos(false);
       }
     }
     cargarEventos();
@@ -40,7 +50,7 @@ export default function SubirFotos() {
     }
 
     if (!eventoSeleccionado) {
-      setMensaje({ tipo: 'error', texto: 'Selecciona un evento.' });
+      setMensaje({ tipo: 'error', texto: 'Selecciona un evento de la lista.' });
       return;
     }
 
@@ -147,7 +157,7 @@ export default function SubirFotos() {
           <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">Panel Fotógrafo</span>
           <h1 className="text-3xl font-extrabold mt-1">Cargar Fotografías</h1>
           <p className="text-neutral-400 text-sm mt-1">
-            Sube las imágenes directamente desde tu dispositivo a la plataforma (Máximo 10 MB por foto).
+            Sube las imágenes directamente desde tu dispositivo (Máx. 10 MB por foto).
           </p>
         </div>
 
@@ -168,14 +178,20 @@ export default function SubirFotos() {
             <select
               value={eventoSeleccionado}
               onChange={(e) => setEventoSeleccionado(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600"
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-neutral-600 appearance-none cursor-pointer"
               required
             >
-              {eventos.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.nombre || ev.titulo || 'Evento sin nombre'}
-                </option>
-              ))}
+              {cargandoEventos ? (
+                <option value="" className="bg-neutral-900 text-white">Cargando eventos...</option>
+              ) : eventos.length === 0 ? (
+                <option value="" className="bg-neutral-900 text-white">No hay eventos disponibles</option>
+              ) : (
+                eventos.map((ev) => (
+                  <option key={ev.id} value={ev.id} className="bg-neutral-900 text-white">
+                    {ev.nombre || ev.titulo || `Evento ID: ${ev.id}`}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -220,8 +236,8 @@ export default function SubirFotos() {
           {/* Botón de Enviar */}
           <button
             type="submit"
-            disabled={subiendo}
-            className="w-full bg-white text-black font-bold py-3 px-6 rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50"
+            disabled={subiendo || cargandoEventos || eventos.length === 0}
+            className="w-full bg-white text-black font-bold py-3 px-6 rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer"
           >
             {subiendo ? 'Subiendo fotos a Supabase...' : 'Subir fotos'}
           </button>
