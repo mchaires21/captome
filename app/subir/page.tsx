@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 interface Evento {
-  id: string;
+  id: string | number;
   nombre?: string;
   titulo?: string;
 }
@@ -26,15 +26,16 @@ export default function SubirFotos() {
         const { data, error } = await supabase.from('eventos').select('*');
         if (error) {
           console.error('Error cargando eventos:', error);
-          setMensaje({ tipo: 'error', texto: 'Error al conectar con la base de datos de eventos.' });
+          setMensaje({ tipo: 'error', texto: `Error en BD (eventos): ${error.message}` });
         } else if (data && data.length > 0) {
           setEventos(data);
-          setEventoSeleccionado(data[0].id);
+          setEventoSeleccionado(String(data[0].id));
         } else {
-          setMensaje({ tipo: 'error', texto: 'No hay eventos creados. Crea uno primero en Supabase.' });
+          setMensaje({ tipo: 'error', texto: 'No hay eventos creados en la base de datos.' });
         }
       } catch (err) {
-        console.error('Error:', err);
+        const msg = err instanceof Error ? err.message : 'Error al conectar con eventos.';
+        setMensaje({ tipo: 'error', texto: msg });
       } finally {
         setCargandoEventos(false);
       }
@@ -54,7 +55,6 @@ export default function SubirFotos() {
       return;
     }
 
-    // Límite de 10 MB por archivo
     const LIMITE_MB = 10;
     const LIMITE_BYTES = LIMITE_MB * 1024 * 1024;
 
@@ -62,7 +62,7 @@ export default function SubirFotos() {
       if (archivos[i].size > LIMITE_BYTES) {
         setMensaje({
           tipo: 'error',
-          texto: `La foto "${archivos[i].name}" supera el límite de ${LIMITE_MB} MB. Por favor comprímela antes de subirla.`,
+          texto: `La foto "${archivos[i].name}" supera el límite de ${LIMITE_MB} MB.`,
         });
         return;
       }
@@ -72,24 +72,26 @@ export default function SubirFotos() {
     setMensaje(null);
 
     let subidasExitosas = 0;
+    let errorDetallado = '';
 
     try {
       for (let i = 0; i < archivos.length; i++) {
         const archivo = archivos[i];
-        const extension = archivo.name.split('.').pop();
-        const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${extension}`;
+        const extension = archivo.name.split('.').pop() || 'jpg';
+        const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${extension}`;
         const rutaArchivo = `${eventoSeleccionado}/${nombreArchivo}`;
 
-        // 1. Subir a Supabase Storage
+        // 1. Subida a Storage
         const { error: uploadError } = await supabase.storage
           .from('fotos-bucket')
           .upload(rutaArchivo, archivo, {
             cacheControl: '3600',
-            upsert: false,
+            upsert: true,
           });
 
         if (uploadError) {
-          console.error('Error al subir archivo:', uploadError.message);
+          console.error('Error Storage:', uploadError);
+          errorDetallado = `Error Storage: ${uploadError.message}`;
           continue;
         }
 
@@ -100,7 +102,7 @@ export default function SubirFotos() {
 
         const urlPublica = urlData.publicUrl;
 
-        // 3. Registrar en la base de datos
+        // 3. Insertar en tabla fotos
         const { error: dbError } = await supabase.from('fotos').insert([
           {
             evento_id: eventoSeleccionado,
@@ -111,7 +113,8 @@ export default function SubirFotos() {
         ]);
 
         if (dbError) {
-          console.error('Error al guardar en base de datos:', dbError.message);
+          console.error('Error DB:', dbError);
+          errorDetallado = `Error Tabla fotos: ${dbError.message}`;
         } else {
           subidasExitosas++;
         }
@@ -127,11 +130,12 @@ export default function SubirFotos() {
       } else {
         setMensaje({
           tipo: 'error',
-          texto: 'No se pudo subir ninguna foto. Verifica que el bucket "fotos-bucket" sea público en Supabase.',
+          texto: errorDetallado || 'No se pudo subir la foto. Revisa la consola o configuración de Supabase.',
         });
       }
-    } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Ocurrió un error inesperado.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Ocurrió un error inesperado.';
+      setMensaje({ tipo: 'error', texto: msg });
     } finally {
       setSubiendo(false);
     }
@@ -139,7 +143,6 @@ export default function SubirFotos() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Navegación */}
       <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="text-2xl font-black tracking-wider text-white hover:opacity-80">
@@ -151,7 +154,6 @@ export default function SubirFotos() {
         </div>
       </header>
 
-      {/* Formulario */}
       <main className="max-w-2xl mx-auto px-4 py-12">
         <div className="mb-8">
           <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">Panel Fotógrafo</span>
@@ -163,8 +165,10 @@ export default function SubirFotos() {
 
         {mensaje && (
           <div
-            className={`p-4 rounded-lg mb-6 text-sm font-semibold ${
-              mensaje.tipo === 'exito' ? 'bg-green-950 text-green-300 border border-green-800' : 'bg-red-950 text-red-300 border border-red-800'
+            className={`p-4 rounded-lg mb-6 text-sm font-semibold break-words ${
+              mensaje.tipo === 'exito'
+                ? 'bg-green-950 text-green-300 border border-green-800'
+                : 'bg-red-950 text-red-300 border border-red-800'
             }`}
           >
             {mensaje.texto}
@@ -172,7 +176,6 @@ export default function SubirFotos() {
         )}
 
         <form onSubmit={handleSubida} className="space-y-6 bg-neutral-900 border border-neutral-800 p-6 rounded-xl">
-          {/* Seleccionar Evento */}
           <div>
             <label className="block text-sm font-bold text-neutral-300 mb-2">Seleccionar Evento</label>
             <select
@@ -187,7 +190,7 @@ export default function SubirFotos() {
                 <option value="" className="bg-neutral-900 text-white">No hay eventos disponibles</option>
               ) : (
                 eventos.map((ev) => (
-                  <option key={ev.id} value={ev.id} className="bg-neutral-900 text-white">
+                  <option key={ev.id} value={String(ev.id)} className="bg-neutral-900 text-white">
                     {ev.nombre || ev.titulo || `Evento ID: ${ev.id}`}
                   </option>
                 ))
@@ -195,7 +198,6 @@ export default function SubirFotos() {
             </select>
           </div>
 
-          {/* Seleccionar Archivos */}
           <div>
             <label className="block text-sm font-bold text-neutral-300 mb-2">Fotos (JPG, PNG - Máx. 10 MB cada una)</label>
             <input
@@ -208,7 +210,6 @@ export default function SubirFotos() {
             />
           </div>
 
-          {/* Número de Dorsal / Corredor */}
           <div>
             <label className="block text-sm font-bold text-neutral-300 mb-1">Dorsal / Número de Corredor (Opcional)</label>
             <span className="text-xs text-neutral-500 block mb-2">Ejemplo: 412, 1089</span>
@@ -221,7 +222,6 @@ export default function SubirFotos() {
             />
           </div>
 
-          {/* Fotógrafo */}
           <div>
             <label className="block text-sm font-bold text-neutral-300 mb-2">Nombre del Fotógrafo (Opcional)</label>
             <input
@@ -233,7 +233,6 @@ export default function SubirFotos() {
             />
           </div>
 
-          {/* Botón de Enviar */}
           <button
             type="submit"
             disabled={subiendo || cargandoEventos || eventos.length === 0}
