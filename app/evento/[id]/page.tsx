@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -24,7 +24,6 @@ interface Foto {
 
 export default function EventoDetalle() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const eventoId = params?.id as string;
 
   const [evento, setEvento] = useState<Evento | null>(null);
@@ -32,15 +31,17 @@ export default function EventoDetalle() {
   const [busquedaDorsal, setBusquedaDorsal] = useState('');
   const [cargando, setCargando] = useState(true);
 
-  // Estado del Modal de Pago
+  // Modal y Pago
   const [fotoSeleccionada, setFotoSeleccionada] = useState<Foto | null>(null);
   const [procesandoPago, setProcesandoPago] = useState(false);
   const [pagoExitoso, setPagoExitoso] = useState(false);
 
   useEffect(() => {
-    // Si viene de un pago exitoso
-    if (searchParams?.get('pago') === 'exito') {
-      setPagoExitoso(true);
+    if (typeof window !== 'undefined') {
+      const query = new URLSearchParams(window.location.search);
+      if (query.get('pago') === 'exito') {
+        setPagoExitoso(true);
+      }
     }
 
     if (!eventoId) return;
@@ -74,7 +75,7 @@ export default function EventoDetalle() {
     }
 
     cargarDatos();
-  }, [eventoId, searchParams]);
+  }, [eventoId]);
 
   const fotosFiltradas = fotos.filter((foto) => {
     if (!busquedaDorsal.trim()) return true;
@@ -107,7 +108,7 @@ export default function EventoDetalle() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white select-none">
       {/* Navegación */}
       <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -153,6 +154,7 @@ export default function EventoDetalle() {
             />
             {busquedaDorsal && (
               <button
+                type="button"
                 onClick={() => setBusquedaDorsal('')}
                 className="bg-neutral-800 hover:bg-neutral-700 text-xs px-4 py-3 rounded-xl font-semibold transition-colors"
               >
@@ -184,29 +186,40 @@ export default function EventoDetalle() {
               {fotosFiltradas.map((foto) => (
                 <div
                   key={foto.id}
-                  className="group relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col"
+                  onClick={() => setFotoSeleccionada(foto)}
+                  className="group relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all flex flex-col cursor-pointer"
                 >
-                  <div 
-                    className="aspect-[4/3] relative overflow-hidden bg-neutral-950 cursor-pointer"
-                    onClick={() => setFotoSeleccionada(foto)}
-                  >
+                  <div className="aspect-[4/3] relative overflow-hidden bg-neutral-950">
                     <img
                       src={foto.url}
                       alt={foto.dorsal ? `Dorsal ${foto.dorsal}` : 'Foto de evento'}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
+                    
+                    {/* Marca de Agua Superpuesta */}
+                    <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
+                      <div className="rotate-[-25deg] text-white/30 text-lg md:text-xl font-black tracking-widest uppercase select-none whitespace-nowrap border-2 border-white/20 px-3 py-1 rounded">
+                        CAPTOME • MUESTRA
+                      </div>
+                    </div>
+
                     {foto.dorsal && (
-                      <span className="absolute top-2 left-2 bg-black/80 backdrop-blur text-white text-xs font-bold px-2.5 py-1 rounded-md border border-neutral-700">
+                      <span className="absolute top-2 left-2 z-10 bg-black/80 backdrop-blur text-white text-xs font-bold px-2.5 py-1 rounded-md border border-neutral-700">
                         #{foto.dorsal}
                       </span>
                     )}
                   </div>
-                  <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900">
+
+                  <div className="p-4 flex items-center justify-between mt-auto bg-neutral-900 z-10">
                     <span className="text-xs text-neutral-400 truncate">
-                      ${foto.precio || 150} MXN
+                      {foto.fotografo ? `Por ${foto.fotografo}` : 'Foto Oficial'}
                     </span>
                     <button
-                      onClick={() => setFotoSeleccionada(foto)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFotoSeleccionada(foto);
+                      }}
                       className="bg-white text-black hover:bg-neutral-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
                     >
                       Comprar
@@ -223,20 +236,27 @@ export default function EventoDetalle() {
       {fotoSeleccionada && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-2xl w-full overflow-hidden flex flex-col md:flex-row">
-            <div className="md:w-1/2 aspect-[4/3] bg-black relative">
+            <div className="md:w-1/2 aspect-[4/3] bg-black relative flex items-center justify-center overflow-hidden">
               <img
                 src={fotoSeleccionada.url}
                 alt="Vista previa"
                 className="w-full h-full object-cover"
               />
+              {/* Marca de agua en el modal */}
+              <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center overflow-hidden">
+                <div className="rotate-[-25deg] text-white/35 text-xl font-black tracking-widest uppercase select-none border-2 border-white/25 px-4 py-1.5 rounded-lg">
+                  CAPTOME • MUESTRA
+                </div>
+              </div>
             </div>
             <div className="p-6 md:w-1/2 flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Fotografía HD</span>
                   <button
+                    type="button"
                     onClick={() => setFotoSeleccionada(null)}
-                    className="text-neutral-400 hover:text-white font-bold text-sm"
+                    className="text-neutral-400 hover:text-white font-bold text-base p-1"
                   >
                     ✕
                   </button>
@@ -252,21 +272,20 @@ export default function EventoDetalle() {
 
               <div className="space-y-3">
                 <button
+                  type="button"
                   onClick={() => iniciarPago(fotoSeleccionada)}
                   disabled={procesandoPago}
-                  className="w-full bg-white text-black font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer"
+                  className="w-full bg-white text-black font-bold py-3 px-4 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer text-sm"
                 >
                   {procesandoPago ? 'Procesando...' : 'Pagar con Tarjeta / Mercado Pago'}
                 </button>
-                <a
-                  href={fotoSeleccionada.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="w-full block text-center bg-neutral-800 text-neutral-300 font-semibold py-2.5 px-4 rounded-xl hover:bg-neutral-700 text-xs transition-colors"
+                <button
+                  type="button"
+                  onClick={() => setFotoSeleccionada(null)}
+                  className="w-full block text-center bg-neutral-800 text-neutral-300 font-semibold py-2.5 px-4 rounded-xl hover:bg-neutral-700 text-xs transition-colors cursor-pointer"
                 >
-                  Descargar Vista Previa
-                </a>
+                  Cerrar
+                </button>
               </div>
             </div>
           </div>
